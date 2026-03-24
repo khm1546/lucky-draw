@@ -43,9 +43,10 @@ pipeline {
             steps {
                 sh """
                     sleep 5
-                    STATUS=\$(curl -s -o /dev/null -w '%{http_code}' http://localhost:${APP_PORT}/)
+                    CONTAINER_IP=\$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${APP_NAME})
+                    STATUS=\$(curl -s -o /dev/null -w '%{http_code}' http://\${CONTAINER_IP}:3000/)
                     if [ "\$STATUS" != "200" ]; then
-                        echo "Health check failed: HTTP \$STATUS"
+                        echo "Health check failed: HTTP \$STATUS (IP: \$CONTAINER_IP)"
                         docker logs ${APP_NAME} --tail 20
                         exit 1
                     fi
