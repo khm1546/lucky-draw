@@ -4,7 +4,7 @@ pipeline {
     environment {
         APP_NAME = 'luckydraw-app'
         APP_PORT = '3001'
-        DEPLOY_DIR = '/home/centos/luckydraw'
+        ENV_FILE = '/var/jenkins_home/luckydraw.env'
     }
 
     stages {
@@ -33,7 +33,7 @@ pipeline {
                         --restart always \
                         -p ${APP_PORT}:3000 \
                         --add-host=host.docker.internal:host-gateway \
-                        --env-file ${DEPLOY_DIR}/.env \
+                        --env-file ${ENV_FILE} \
                         ${APP_NAME}:latest
                 """
             }
