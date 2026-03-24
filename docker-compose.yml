@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: luckydraw-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-luckydraw2026!}
+      MYSQL_DATABASE: ${DB_NAME:-birthday_draw}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "127.0.0.1:3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    container_name: luckydraw-app
+    restart: always
+    ports:
+      - "80:3000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DB_HOST: mysql
+      DB_USER: root
+      DB_PASSWORD: ${DB_ROOT_PASSWORD:-luckydraw2026!}
+      DB_NAME: ${DB_NAME:-birthday_draw}
+      PORT: 3000
+      JWT_SECRET: ${JWT_SECRET}
+      AES_KEY: ${AES_KEY}
+
+volumes:
+  mysql_data:
