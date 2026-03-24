@@ -656,6 +656,20 @@
       syncColorInputs('picker');
       updateBoardPreview();
       loadAll();
+
+      // SSE 실시간 업데이트
+      function startRealtimeUpdates() {
+        if (!window.EventSource) return;
+        const token = AUTH.getToken();
+        if (!token) return;
+        const es = new EventSource(`/api/events/${slug}/stream?token=${encodeURIComponent(token)}`);
+        es.addEventListener('admin-update', () => { loadAll(); });
+        es.addEventListener('error', () => {
+          es.close();
+          setTimeout(startRealtimeUpdates, 5000);
+        });
+      }
+      startRealtimeUpdates();
     })();
   </script>
 </body>

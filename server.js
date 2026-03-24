@@ -182,10 +182,15 @@ function authMiddleware(req, res, next) {
     return res.status(500).json({ error: 'JWT_SECRET이 설정되지 않았습니다.' });
   }
   const authHeader = req.headers['authorization'];
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  let token;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.slice(7);
+  } else if (req.query?.token) {
+    token = req.query.token;
+  }
+  if (!token) {
     return res.status(401).json({ error: '인증이 필요합니다.' });
   }
-  const token = authHeader.slice(7);
   try {
     const decoded = jwt.verify(token, secret);
     req.user = { id: decoded.id, email: decoded.email, displayName: decoded.displayName };
