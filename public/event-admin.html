@@ -658,18 +658,22 @@
       loadAll();
 
       // SSE 실시간 업데이트
-      function startRealtimeUpdates() {
-        if (!window.EventSource) return;
-        const token = AUTH.getToken();
-        if (!token) return;
-        const es = new EventSource(`/api/events/${slug}/stream?token=${encodeURIComponent(token)}`);
-        es.addEventListener('admin-update', () => { loadAll(); });
-        es.addEventListener('error', () => {
-          es.close();
-          setTimeout(startRealtimeUpdates, 5000);
-        });
-      }
-      startRealtimeUpdates();
+      setTimeout(function connectSSE() {
+        try {
+          var token = AUTH.getToken();
+          if (!token || !slug) return;
+          var es = new EventSource('/api/events/' + slug + '/stream?token=' + encodeURIComponent(token));
+          es.addEventListener('admin-update', function() { loadAll(); });
+          es.addEventListener('connected', function() { console.log('SSE connected'); });
+          es.onerror = function() {
+            es.close();
+            setTimeout(connectSSE, 3000);
+          };
+        } catch(e) {
+          console.error('SSE error:', e);
+          setTimeout(connectSSE, 3000);
+        }
+      }, 1000);
     })();
   </script>
 </body>
