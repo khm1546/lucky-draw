@@ -531,7 +531,7 @@ app.post('/api/events/:slug/reset', authMiddleware, eventOwnerMiddleware, adminL
   }
 });
 
-app.get('/api/events/:slug/status', authMiddleware, eventOwnerMiddleware, adminLimiter, async (req, res) => {
+app.get('/api/events/:slug/status', authMiddleware, eventOwnerMiddleware, async (req, res) => {
   try {
     const eventId = req.event.id;
     const [rows] = await pool.query(
@@ -559,7 +559,7 @@ app.get('/api/events/:slug/status', authMiddleware, eventOwnerMiddleware, adminL
   }
 });
 
-app.get('/api/events/:slug/history', authMiddleware, eventOwnerMiddleware, adminLimiter, async (req, res) => {
+app.get('/api/events/:slug/history', authMiddleware, eventOwnerMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.query(
       `SELECT id, position, page, prize_rank, drawn_at
@@ -604,6 +604,7 @@ app.get('/api/events/:slug/stream', authMiddleware, eventOwnerMiddleware, (req, 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
   if (typeof res.flushHeaders === 'function') res.flushHeaders();
 
   clients.add(res);
