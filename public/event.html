@@ -12,9 +12,6 @@
 
   <!-- Header -->
   <div class="header" id="eventHeader">
-    <div class="event-header-logo" id="eventLogoWrap" style="display:none;">
-      <img id="eventLogoImg" src="" alt="로고" class="event-logo-img" />
-    </div>
     <h1><span id="eventTitle">Lucky Draw</span></h1>
     <div class="remaining-count" id="remainingCount"></div>
   </div>
@@ -47,6 +44,17 @@
   <!-- Event Status Messages -->
   <div class="event-status-msg" id="eventStatusMsg" style="display:none;"></div>
 
+  <!-- Password Gate -->
+  <div class="password-gate" id="passwordGate" style="display:none;">
+    <div class="password-gate-card">
+      <h2 id="passwordGateTitle">비밀번호 입력</h2>
+      <p>이벤트에 참여하려면 비밀번호를 입력해주세요.</p>
+      <input type="password" id="passwordInput" placeholder="비밀번호" />
+      <div class="form-error" id="passwordError" style="display:none;"></div>
+      <button class="btn btn-primary btn-full" id="passwordSubmit">확인</button>
+    </div>
+  </div>
+
   <script src="/js/letters.js"></script>
   <script src="/js/auth.js"></script>
   <script>
@@ -75,8 +83,10 @@
       const gridContainer = document.querySelector('.grid-container');
       const eventStatusMsg = document.getElementById('eventStatusMsg');
       const eventTitle = document.getElementById('eventTitle');
-      const eventLogoWrap = document.getElementById('eventLogoWrap');
-      const eventLogoImg = document.getElementById('eventLogoImg');
+      const passwordGate = document.getElementById('passwordGate');
+      const passwordInput = document.getElementById('passwordInput');
+      const passwordError = document.getElementById('passwordError');
+      const passwordSubmit = document.getElementById('passwordSubmit');
 
       modalClose.addEventListener('click', closeModal);
       modalOverlay.addEventListener('click', (e) => {
@@ -104,20 +114,6 @@
           if (data.title) eventTitle.textContent = data.title;
           document.title = (data.title || 'Lucky Draw');
 
-          // Set logo
-          if (data.logo) {
-            eventLogoImg.src = data.logo;
-            eventLogoWrap.style.display = 'block';
-          }
-
-          // Set background
-          if (data.background) {
-            document.body.style.backgroundImage = `url(${data.background})`;
-            document.body.style.backgroundSize = 'cover';
-            document.body.style.backgroundPosition = 'center';
-            document.body.style.backgroundAttachment = 'fixed';
-          }
-
           // Check status
           if (data.status === 'draft') {
             showStatusMessage('이벤트가 아직 시작되지 않았습니다.');
@@ -126,6 +122,14 @@
           if (data.status === 'closed') {
             showStatusMessage('종료된 이벤트입니다.');
             return false;
+          }
+
+          // Check password
+          if (data.hasPassword) {
+            const verified = sessionStorage.getItem(`event_verified_${slug}`);
+            if (!verified) {
+              return 'need_password';
+            }
           }
 
           return true;
@@ -386,10 +390,55 @@
         setTimeout(() => { confettiContainer.innerHTML = ''; }, 4000);
       }
 
+      function showPasswordGate() {
+        document.getElementById('eventHeader').style.display = 'none';
+        gridContainer.style.display = 'none';
+        pageTabs.style.display = 'none';
+        passwordGate.style.display = 'flex';
+      }
+
+      async function verifyPassword() {
+        const pw = passwordInput.value;
+        if (!pw) {
+          passwordError.textContent = '비밀번호를 입력해주세요.';
+          passwordError.style.display = 'block';
+          return;
+        }
+        try {
+          const res = await fetch(`/api/e/${slug}/verify-password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password: pw })
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            passwordError.textContent = data.error || '비밀번호가 올바르지 않습니다.';
+            passwordError.style.display = 'block';
+            return;
+          }
+          sessionStorage.setItem(`event_verified_${slug}`, 'true');
+          passwordGate.style.display = 'none';
+          document.getElementById('eventHeader').style.display = '';
+          await loadCards();
+        } catch (err) {
+          passwordError.textContent = '오류가 발생했습니다.';
+          passwordError.style.display = 'block';
+        }
+      }
+
+      passwordSubmit.addEventListener('click', verifyPassword);
+      passwordInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') verifyPassword();
+      });
+
       // Init
       (async () => {
-        const ok = await loadEventInfo();
-        if (ok) await loadCards();
+        const result = await loadEventInfo();
+        if (result === 'need_password') {
+          showPasswordGate();
+        } else if (result === true) {
+          await loadCards();
+        }
       })();
     })();
   </script>

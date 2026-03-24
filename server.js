@@ -2,13 +2,11 @@ require('dotenv').config();
 const express = require('express');
 const crypto = require('crypto');
 const path = require('path');
-const fs = require('fs');
 const { pool, initDatabase } = require('./db');
 const { buildTextLayout, normalizeBoardText, getBoardPages } = require('./public/js/letters');
 
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const multer = require('multer');
 const { nanoid } = require('nanoid');
 const { encrypt, decrypt, hashEmail } = require('./crypto-util');
 
@@ -28,13 +26,6 @@ app.use((req, res, next) => {
 
 // Static files
 app.use(express.static(path.join(__dirname, 'public')));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-// Ensure uploads directory exists
-const uploadsDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
 
 // ==================== Constants ====================
 
@@ -180,38 +171,6 @@ function broadcastEventUpdate(eventId, type = 'update') {
   });
 }
 
-// ==================== Multer Setup ====================
-
-const multerStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const eventId = req.event?.id;
-    if (!eventId) return cb(new Error('이벤트 정보가 없습니다.'));
-    const dir = path.join(uploadsDir, String(eventId));
-    fs.mkdirSync(dir, { recursive: true });
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `${crypto.randomUUID()}${ext}`);
-  }
-});
-
-const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-
-function multerFileFilter(req, file, cb) {
-  if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(new Error('이미지 파일만 업로드할 수 있습니다. (jpeg, png, gif, webp)'));
-  }
-}
-
-const upload = multer({
-  storage: multerStorage,
-  fileFilter: multerFileFilter,
-  limits: { fileSize: 5 * 1024 * 1024 } // default 5MB; logo checked in handler
-});
-
 // ==================== Auth Middleware ====================
 
 function authMiddleware(req, res, next) {
@@ -352,7 +311,7 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/events', authMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.query(
-      `SELECT id, slug, title, board_text, board_color, logo_path, background_path,
+      `SELECT id, slug, title, board_text, board_color,
               status, distribution_mode, prize_config, created_at, updated_at
        FROM events WHERE user_id = ? AND is_deleted = FALSE
        ORDER BY created_at DESC`,
@@ -405,7 +364,7 @@ app.get('/api/events/:slug', authMiddleware, eventOwnerMiddleware, async (req, r
 
 app.put('/api/events/:slug', authMiddleware, eventOwnerMiddleware, async (req, res) => {
   try {
-    const { title, boardText, boardColor, distributionMode, prizeConfig, status } = req.body || {};
+    const { title, boardText, boardColor, distributionMode, prizeConfig, status, accessPassword } = req.body || {};
 
     const fields = [];
     const values = [];
@@ -426,6 +385,11 @@ app.put('/api/events/:slug', authMiddleware, eventOwnerMiddleware, async (req, r
     }
     if (prizeConfig !== undefined) {
       fields.push('prize_config = ?'); values.push(JSON.stringify(prizeConfig));
+    }
+    if (accessPassword !== undefined) {
+      // 빈 문자열이면 비밀번호 해제 (NULL)
+      fields.push('access_password = ?');
+      values.push(accessPassword.trim() || null);
     }
     if (status !== undefined) {
       if (!['draft', 'active', 'closed'].includes(status)) {
@@ -640,63 +604,12 @@ app.get('/api/events/:slug/stream', authMiddleware, eventOwnerMiddleware, (req, 
   });
 });
 
-// ==================== File Upload ====================
-
-app.post('/api/events/:slug/upload', authMiddleware, eventOwnerMiddleware, (req, res, next) => {
-  upload.single('file')(req, res, (err) => {
-    if (err) {
-      if (err.code === 'LIMIT_FILE_SIZE') {
-        return res.status(400).json({ error: '파일 크기가 너무 큽니다.' });
-      }
-      return res.status(400).json({ error: err.message || '파일 업로드 오류가 발생했습니다.' });
-    }
-    next();
-  });
-}, async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: '파일이 없습니다.' });
-    }
-
-    const type = req.body?.type;
-    if (!['logo', 'background'].includes(type)) {
-      fs.unlinkSync(req.file.path);
-      return res.status(400).json({ error: 'type은 logo 또는 background여야 합니다.' });
-    }
-
-    // Logo max 2MB check
-    if (type === 'logo' && req.file.size > 2 * 1024 * 1024) {
-      fs.unlinkSync(req.file.path);
-      return res.status(400).json({ error: '로고 파일은 최대 2MB입니다.' });
-    }
-
-    const relativePath = `/uploads/${req.event.id}/${path.basename(req.file.path)}`;
-    const field = type === 'logo' ? 'logo_path' : 'background_path';
-
-    // Delete old file if exists
-    const oldPath = req.event[type === 'logo' ? 'logo_path' : 'background_path'];
-    if (oldPath) {
-      const oldAbsolute = path.join(__dirname, oldPath);
-      if (fs.existsSync(oldAbsolute)) {
-        try { fs.unlinkSync(oldAbsolute); } catch (e) { /* ignore */ }
-      }
-    }
-
-    await pool.query(`UPDATE events SET ${field} = ? WHERE id = ?`, [relativePath, req.event.id]);
-
-    res.json({ success: true, path: relativePath });
-  } catch (err) {
-    console.error('POST /api/events/:slug/upload error:', err);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
-  }
-});
-
 // ==================== Public API ====================
 
 app.get('/api/e/:slug/info', async (req, res) => {
   try {
     const [rows] = await pool.query(
-      `SELECT title, board_text, board_color, logo_path, background_path, status
+      `SELECT title, board_text, board_color, status, access_password
        FROM events WHERE slug = ? AND is_deleted = FALSE`,
       [req.params.slug]
     );
@@ -708,12 +621,35 @@ app.get('/api/e/:slug/info', async (req, res) => {
       title: e.title,
       boardText: e.board_text,
       boardColor: e.board_color,
-      logo: e.logo_path,
-      background: e.background_path,
-      status: e.status
+      status: e.status,
+      hasPassword: !!e.access_password
     });
   } catch (err) {
     console.error('GET /api/e/:slug/info error:', err);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+});
+
+app.post('/api/e/:slug/verify-password', async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      'SELECT access_password FROM events WHERE slug = ? AND is_deleted = FALSE',
+      [req.params.slug]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ error: '이벤트를 찾을 수 없습니다.' });
+    }
+    const event = rows[0];
+    if (!event.access_password) {
+      return res.json({ success: true });
+    }
+    const password = req.body?.password;
+    if (!password || password !== event.access_password) {
+      return res.status(401).json({ error: '비밀번호가 올바르지 않습니다.' });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error('POST /api/e/:slug/verify-password error:', err);
     res.status(500).json({ error: '서버 오류가 발생했습니다.' });
   }
 });
