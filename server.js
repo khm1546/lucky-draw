@@ -84,13 +84,16 @@ function shuffle(arr) {
   return a;
 }
 
-function buildPrizeDistribution(total) {
+function buildPrizeDistribution(total, rankCount = 6) {
   if (total <= 0) return [];
 
-  const raw = PRIZE_RATIOS.map(p => ({
+  const ratios = PRIZE_RATIOS.slice(0, rankCount);
+  // 비율 재정규화
+  const ratioSum = ratios.reduce((s, p) => s + p.ratio, 0);
+  const raw = ratios.map(p => ({
     rank: p.rank,
-    exact: p.ratio * total,
-    count: Math.floor(p.ratio * total)
+    exact: (p.ratio / ratioSum) * total,
+    count: Math.floor((p.ratio / ratioSum) * total)
   }));
 
   if (raw[0].count === 0) raw[0].count = 1;
@@ -124,8 +127,8 @@ function buildPrizeDistribution(total) {
 }
 
 function buildManualPrizeDistribution(total, manualRanks) {
-  if (!Array.isArray(manualRanks) || manualRanks.length !== 6) {
-    throw new Error('수동 배분 값이 올바르지 않습니다.');
+  if (!Array.isArray(manualRanks) || manualRanks.length < 2 || manualRanks.length > 6) {
+    throw new Error('수동 배분 값이 올바르지 않습니다. (2~6등)');
   }
 
   const sorted = manualRanks
@@ -364,7 +367,7 @@ app.get('/api/events/:slug', authMiddleware, eventOwnerMiddleware, async (req, r
 
 app.put('/api/events/:slug', authMiddleware, eventOwnerMiddleware, async (req, res) => {
   try {
-    const { title, boardText, boardColor, distributionMode, prizeConfig, status, accessPassword } = req.body || {};
+    const { title, boardText, boardColor, distributionMode, prizeConfig, status, accessPassword, rankCount } = req.body || {};
 
     const fields = [];
     const values = [];
@@ -385,6 +388,13 @@ app.put('/api/events/:slug', authMiddleware, eventOwnerMiddleware, async (req, r
     }
     if (prizeConfig !== undefined) {
       fields.push('prize_config = ?'); values.push(JSON.stringify(prizeConfig));
+    }
+    if (rankCount !== undefined) {
+      const rc = parseInt(rankCount, 10);
+      if (rc < 2 || rc > 6) {
+        return res.status(400).json({ error: '등수는 2~6 사이여야 합니다.' });
+      }
+      fields.push('rank_count = ?'); values.push(rc);
     }
     if (accessPassword !== undefined) {
       // 빈 문자열이면 비밀번호 해제 (NULL)
@@ -434,6 +444,7 @@ app.post('/api/events/:slug/init', authMiddleware, eventOwnerMiddleware, adminLi
     const text = normalizeBoardText(req.body?.text || event.board_text);
     const boardColor = req.body?.boardColor;
     const distributionMode = req.body?.distributionMode || event.distribution_mode || 'auto';
+    const rankCount = parseInt(req.body?.rankCount || event.rank_count, 10) || 6;
     const manualRanks = req.body?.manualRanks;
 
     if (!text) {
@@ -468,7 +479,7 @@ app.post('/api/events/:slug/init', authMiddleware, eventOwnerMiddleware, adminLi
         return res.status(400).json({ error: validationErr.message });
       }
     } else {
-      prizes = shuffle(buildPrizeDistribution(count));
+      prizes = shuffle(buildPrizeDistribution(count, rankCount));
     }
 
     const pageSlots = [];

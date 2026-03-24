@@ -56,6 +56,7 @@ async function initDatabase() {
       board_color       VARCHAR(7)      NOT NULL DEFAULT '#FFFFFF' COMMENT '뽑기판 카드 색상 (#RRGGBB)',
       access_password   VARCHAR(100)    NULL COMMENT '참가자 접근 비밀번호 (NULL이면 비밀번호 없음)',
       status            ENUM('draft','active','closed') NOT NULL DEFAULT 'draft' COMMENT '이벤트 상태 (준비중/진행중/종료)',
+      rank_count        TINYINT UNSIGNED NOT NULL DEFAULT 6 COMMENT '등수 개수 (2~6)',
       distribution_mode ENUM('auto','manual') NOT NULL DEFAULT 'auto' COMMENT '등수 배분 방식 (자동/수동)',
       prize_config      JSON            NULL COMMENT '수동 배분 설정 [{"rank":1,"count":1},...]',
       is_deleted        BOOLEAN         NOT NULL DEFAULT FALSE COMMENT '삭제 여부 (소프트 삭제)',

@@ -115,24 +115,28 @@
           <button class="btn btn-secondary color-save-btn" id="btnSaveColor" type="button">색상 저장</button>
         </div>
         <div id="boardPreview" class="board-preview"></div>
+        <label>등수 개수</label>
+        <div class="inline-action-row">
+          <select id="rankCountSelect" class="select-input" style="width:120px;">
+            <option value="2">2등까지</option>
+            <option value="3">3등까지</option>
+            <option value="4">4등까지</option>
+            <option value="5">5등까지</option>
+            <option value="6" selected>6등까지</option>
+          </select>
+        </div>
         <label>순위 배분 방식</label>
         <div class="distribution-mode">
           <label><input type="radio" name="distributionMode" value="auto" checked /> 자동 배분</label>
           <label><input type="radio" name="distributionMode" value="manual" /> 수동 배분</label>
         </div>
         <div class="manual-distribution" id="manualDistribution" style="display:none;">
-          <div class="manual-row"><span>1등</span><input type="number" id="rank1Input" min="0" step="1" value="1" />
-          </div>
-          <div class="manual-row"><span>2등</span><input type="number" id="rank2Input" min="0" step="1" value="2" />
-          </div>
-          <div class="manual-row"><span>3등</span><input type="number" id="rank3Input" min="0" step="1" value="7" />
-          </div>
-          <div class="manual-row"><span>4등</span><input type="number" id="rank4Input" min="0" step="1" value="10" />
-          </div>
-          <div class="manual-row"><span>5등</span><input type="number" id="rank5Input" min="0" step="1" value="20" />
-          </div>
-          <div class="manual-row"><span>6등</span><input type="number" id="rank6Input" min="0" step="1" value="60" />
-          </div>
+          <div class="manual-row" data-rank="1"><span>1등</span><input type="number" id="rank1Input" min="0" step="1" value="1" /></div>
+          <div class="manual-row" data-rank="2"><span>2등</span><input type="number" id="rank2Input" min="0" step="1" value="2" /></div>
+          <div class="manual-row" data-rank="3"><span>3등</span><input type="number" id="rank3Input" min="0" step="1" value="7" /></div>
+          <div class="manual-row" data-rank="4"><span>4등</span><input type="number" id="rank4Input" min="0" step="1" value="10" /></div>
+          <div class="manual-row" data-rank="5"><span>5등</span><input type="number" id="rank5Input" min="0" step="1" value="20" /></div>
+          <div class="manual-row" data-rank="6"><span>6등</span><input type="number" id="rank6Input" min="0" step="1" value="60" /></div>
           <div class="manual-sum" id="manualSum">합계: 100 / 카드 수: 0</div>
         </div>
         <small>텍스트는 한글/영문/숫자/공백을 사용할 수 있습니다. 공백으로 탭(페이지)을 구분합니다. 카드 수는 텍스트 모양에 따라 자동 결정됩니다. 수동 배분 시 합계가 카드 수와 같아야
@@ -274,7 +278,27 @@
       const btnSaveColor = document.getElementById('btnSaveColor');
       const manualDistribution = document.getElementById('manualDistribution');
       const distributionModeInputs = document.querySelectorAll('input[name="distributionMode"]');
+      const rankCountSelect = document.getElementById('rankCountSelect');
       const rankInputs = [1, 2, 3, 4, 5, 6].map(rank => document.getElementById(`rank${rank}Input`));
+
+      function getRankCount() {
+        return parseInt(rankCountSelect.value, 10) || 6;
+      }
+
+      function syncRankRows() {
+        const rc = getRankCount();
+        document.querySelectorAll('.manual-row[data-rank]').forEach(row => {
+          const rank = parseInt(row.getAttribute('data-rank'), 10);
+          row.style.display = rank <= rc ? '' : 'none';
+          if (rank > rc) {
+            const input = row.querySelector('input');
+            if (input) input.value = '0';
+          }
+        });
+        validateManualSum();
+      }
+
+      rankCountSelect.addEventListener('change', syncRankRows);
       const boardPreview = document.getElementById('boardPreview');
 
       distributionModeInputs.forEach(input => input.addEventListener('change', syncDistributionMode));
@@ -319,7 +343,8 @@
       }
 
       function getManualSum() {
-        return rankInputs.reduce((sum, el) => sum + (parseInt(el.value, 10) || 0), 0);
+        const rc = getRankCount();
+        return rankInputs.slice(0, rc).reduce((sum, el) => sum + (parseInt(el.value, 10) || 0), 0);
       }
 
       function getCardCount() {
@@ -422,9 +447,10 @@
         const distributionMode = getDistributionMode();
         if (!text) { alert('뽑기판 텍스트를 입력해주세요.'); return; }
 
+        const rc = getRankCount();
         let manualRanks = null;
         if (distributionMode === 'manual') {
-          manualRanks = rankInputs.map((el, idx) => ({
+          manualRanks = rankInputs.slice(0, rc).map((el, idx) => ({
             rank: idx + 1,
             count: parseInt(el.value, 10)
           }));
@@ -442,7 +468,7 @@
           const res = await AUTH.fetchWithAuth(`/api/events/${slug}/init`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text, boardColor, distributionMode, manualRanks })
+            body: JSON.stringify({ text, boardColor, distributionMode, rankCount: rc, manualRanks })
           });
           if (!res) return;
           const data = await res.json();
@@ -490,6 +516,10 @@
           }
           if (data.access_password !== undefined) {
             document.getElementById('accessPasswordInput').value = data.access_password || '';
+          }
+          if (data.rank_count) {
+            rankCountSelect.value = data.rank_count;
+            syncRankRows();
           }
           if (data.status) {
             updateStatusUI(data.status);
@@ -622,6 +652,7 @@
 
       // Init
       syncDistributionMode();
+      syncRankRows();
       syncColorInputs('picker');
       updateBoardPreview();
       loadAll();
