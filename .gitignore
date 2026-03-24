@@ -1,0 +1,11 @@
+node_modules/
+.env
+.env.*
+!.env.example
+*.gif
+.DS_Store
+.claude/
+.omc/
+.playwright-mcp/
+.pydeps/
+uploads/

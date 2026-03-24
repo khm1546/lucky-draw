@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>대시보드 - Lucky Draw</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="dash-body">
+
+  <div class="dash-layout">
+    <!-- Top Bar -->
+    <header class="dash-header">
+      <div class="dash-header-inner">
+        <span class="dash-logo">Lucky Draw</span>
+        <div class="dash-header-right">
+          <span class="dash-user-name" id="dashUserName"></span>
+          <button class="btn btn-secondary btn-sm" id="btnLogout">로그아웃</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main -->
+    <main class="dash-main">
+      <div class="dash-top-row">
+        <h1 class="dash-page-title">내 이벤트</h1>
+        <button class="btn btn-primary" id="btnNewEvent">+ 새 이벤트 만들기</button>
+      </div>
+
+      <div id="eventList" class="event-list">
+        <div class="dash-loading" id="dashLoading">불러오는 중...</div>
+      </div>
+    </main>
+  </div>
+
+  <!-- New Event Modal -->
+  <div class="modal-overlay" id="newEventModal">
+    <div class="modal modal-form">
+      <h2 class="modal-form-title">새 이벤트 만들기</h2>
+      <div class="form-group">
+        <label for="newEventTitle">이벤트 제목</label>
+        <input type="text" id="newEventTitle" placeholder="예: 생일 럭키드로우" maxlength="50" />
+      </div>
+      <div class="form-error" id="newEventError" style="display:none;"></div>
+      <div class="modal-form-actions">
+        <button class="btn btn-secondary" id="btnNewEventCancel">취소</button>
+        <button class="btn btn-primary" id="btnNewEventSubmit">만들기</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/auth.js"></script>
+  <script>
+    (function () {
+      if (!AUTH.isLoggedIn()) {
+        window.location.href = '/login';
+        return;
+      }
+
+      const eventList = document.getElementById('eventList');
+      const dashLoading = document.getElementById('dashLoading');
+      const dashUserName = document.getElementById('dashUserName');
+      const newEventModal = document.getElementById('newEventModal');
+      const newEventError = document.getElementById('newEventError');
+      const newEventTitle = document.getElementById('newEventTitle');
+
+      document.getElementById('btnLogout').addEventListener('click', () => {
+        AUTH.logout();
+      });
+
+      document.getElementById('btnNewEvent').addEventListener('click', () => {
+        newEventTitle.value = '';
+        newEventError.style.display = 'none';
+        newEventModal.classList.add('show');
+        newEventTitle.focus();
+      });
+
+      document.getElementById('btnNewEventCancel').addEventListener('click', () => {
+        newEventModal.classList.remove('show');
+      });
+
+      newEventModal.addEventListener('click', (e) => {
+        if (e.target === newEventModal) newEventModal.classList.remove('show');
+      });
+
+      document.getElementById('btnNewEventSubmit').addEventListener('click', createEvent);
+      newEventTitle.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') createEvent();
+      });
+
+      async function createEvent() {
+        const title = newEventTitle.value.trim();
+        if (!title) {
+          newEventError.textContent = '이벤트 제목을 입력해주세요.';
+          newEventError.style.display = 'block';
+          return;
+        }
+        newEventError.style.display = 'none';
+
+        const submitBtn = document.getElementById('btnNewEventSubmit');
+        submitBtn.disabled = true;
+
+        try {
+          const res = await AUTH.fetchWithAuth('/api/events', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title })
+          });
+          if (!res) return;
+          const data = await res.json();
+          if (!res.ok) {
+            newEventError.textContent = data.error || '이벤트 생성에 실패했습니다.';
+            newEventError.style.display = 'block';
+            return;
+          }
+          newEventModal.classList.remove('show');
+          window.location.href = `/event/${data.event.slug}/admin`;
+        } catch (err) {
+          alert('오류: ' + err.message);
+        } finally {
+          submitBtn.disabled = false;
+        }
+      }
+
+      async function loadEvents() {
+        try {
+          const res = await AUTH.fetchWithAuth('/api/events');
+          if (!res) return;
+          const data = await res.json();
+
+          dashLoading.style.display = 'none';
+
+          if (!res.ok) {
+            alert(data.error || '이벤트를 불러오지 못했습니다.');
+            return;
+          }
+
+          // Show user name
+          if (data.user && data.user.name) {
+            dashUserName.textContent = data.user.name;
+          }
+
+          const events = data.events || [];
+          if (events.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'dash-empty';
+            empty.innerHTML = '<p>아직 이벤트가 없습니다.</p><small>새 이벤트 만들기 버튼을 눌러 시작하세요.</small>';
+            eventList.appendChild(empty);
+            return;
+          }
+
+          events.forEach(ev => renderEventCard(ev));
+        } catch (err) {
+          dashLoading.style.display = 'none';
+          alert('오류: ' + err.message);
+        }
+      }
+
+      function renderEventCard(ev) {
+        const participantLink = `${window.location.origin}/event/${ev.slug}`;
+
+        const card = document.createElement('div');
+        card.className = 'event-card';
+
+        const topRow = document.createElement('div');
+        topRow.className = 'event-card-top';
+
+        const titleEl = document.createElement('h3');
+        titleEl.className = 'event-card-title';
+        titleEl.textContent = ev.title;
+
+        const statusBadge = document.createElement('span');
+        statusBadge.className = `event-status-badge status-${ev.status}`;
+        statusBadge.textContent = statusLabel(ev.status);
+
+        topRow.appendChild(titleEl);
+        topRow.appendChild(statusBadge);
+
+        const metaRow = document.createElement('div');
+        metaRow.className = 'event-card-meta';
+
+        const cardCountEl = document.createElement('span');
+        cardCountEl.className = 'event-meta-item';
+        cardCountEl.textContent = `카드 ${ev.card_count ?? 0}개`;
+
+        const drawnCountEl = document.createElement('span');
+        drawnCountEl.className = 'event-meta-item';
+        drawnCountEl.textContent = `추첨 ${ev.drawn_count ?? 0}회`;
+
+        metaRow.appendChild(cardCountEl);
+        metaRow.appendChild(drawnCountEl);
+
+        const actions = document.createElement('div');
+        actions.className = 'event-card-actions';
+
+        const manageBtn = document.createElement('a');
+        manageBtn.className = 'btn btn-primary btn-sm';
+        manageBtn.href = `/event/${ev.slug}/admin`;
+        manageBtn.textContent = '관리';
+
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'btn btn-secondary btn-sm';
+        copyBtn.textContent = '참가 링크 복사';
+        copyBtn.addEventListener('click', () => {
+          navigator.clipboard.writeText(participantLink).then(() => {
+            copyBtn.textContent = '복사됨!';
+            setTimeout(() => { copyBtn.textContent = '참가 링크 복사'; }, 2000);
+          }).catch(() => {
+            alert('링크: ' + participantLink);
+          });
+        });
+
+        actions.appendChild(manageBtn);
+        actions.appendChild(copyBtn);
+
+        card.appendChild(topRow);
+        card.appendChild(metaRow);
+        card.appendChild(actions);
+        eventList.appendChild(card);
+      }
+
+      function statusLabel(status) {
+        const map = { draft: '준비중', active: '진행중', closed: '종료' };
+        return map[status] || status;
+      }
+
+      loadEvents();
+    })();
+  </script>
+</body>
+</html>

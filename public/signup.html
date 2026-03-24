@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>회원가입 - Lucky Draw</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="auth-body">
+
+  <div class="auth-container">
+    <div class="auth-card">
+      <div class="auth-logo">
+        <a href="/" class="auth-logo-link">Lucky Draw</a>
+      </div>
+      <h1 class="auth-title">회원가입</h1>
+
+      <form class="auth-form" id="signupForm" novalidate>
+        <div class="form-group">
+          <label for="name">이름</label>
+          <input type="text" id="name" name="name" placeholder="홍길동" autocomplete="name" required />
+        </div>
+        <div class="form-group">
+          <label for="email">이메일</label>
+          <input type="email" id="email" name="email" placeholder="example@email.com" autocomplete="email" required />
+        </div>
+        <div class="form-group">
+          <label for="password">비밀번호</label>
+          <input type="password" id="password" name="password" placeholder="8자 이상 입력" autocomplete="new-password" required />
+        </div>
+        <div class="form-group">
+          <label for="passwordConfirm">비밀번호 확인</label>
+          <input type="password" id="passwordConfirm" name="passwordConfirm" placeholder="비밀번호 재입력" autocomplete="new-password" required />
+        </div>
+        <div class="form-error" id="formError" style="display:none;"></div>
+        <button type="submit" class="btn btn-primary btn-full" id="submitBtn">회원가입</button>
+      </form>
+
+      <p class="auth-switch">
+        이미 계정이 있으신가요? <a href="/login">로그인</a>
+      </p>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const form = document.getElementById('signupForm');
+      const errorEl = document.getElementById('formError');
+      const submitBtn = document.getElementById('submitBtn');
+
+      // Already logged in
+      if (localStorage.getItem('token')) {
+        window.location.href = '/dashboard';
+        return;
+      }
+
+      function showError(msg) {
+        errorEl.textContent = msg;
+        errorEl.style.display = 'block';
+      }
+
+      function hideError() {
+        errorEl.style.display = 'none';
+      }
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        hideError();
+
+        const name = document.getElementById('name').value.trim();
+        const email = document.getElementById('email').value.trim();
+        const password = document.getElementById('password').value;
+        const passwordConfirm = document.getElementById('passwordConfirm').value;
+
+        if (!name || !email || !password || !passwordConfirm) {
+          showError('모든 항목을 입력해주세요.');
+          return;
+        }
+
+        if (password.length < 8) {
+          showError('비밀번호는 8자 이상이어야 합니다.');
+          return;
+        }
+
+        if (password !== passwordConfirm) {
+          showError('비밀번호가 일치하지 않습니다.');
+          return;
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = '가입 중...';
+
+        try {
+          const res = await fetch('/api/auth/signup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ displayName: name, email, password })
+          });
+          const data = await res.json();
+
+          if (!res.ok || !data.token) {
+            showError(data.error || '회원가입에 실패했습니다.');
+            return;
+          }
+
+          localStorage.setItem('token', data.token);
+          window.location.href = '/dashboard';
+        } catch (err) {
+          showError('네트워크 오류가 발생했습니다. 다시 시도해주세요.');
+        } finally {
+          submitBtn.disabled = false;
+          submitBtn.textContent = '회원가입';
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

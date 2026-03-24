@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>이벤트 관리 - Lucky Draw</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="admin-container">
+    <!-- Header -->
+    <div class="admin-header">
+      <div class="admin-header-top">
+        <a href="/dashboard" class="btn btn-secondary btn-sm">← 대시보드</a>
+        <h1 id="adminEventTitle">이벤트 관리</h1>
+        <button class="btn btn-secondary btn-sm" id="btnLogout">로그아웃</button>
+      </div>
+    </div>
+
+    <!-- Event Settings -->
+    <div class="admin-section">
+      <h2>이벤트 설정</h2>
+      <div class="board-config">
+        <label for="eventTitleInput">이벤트 제목</label>
+        <div class="inline-action-row">
+          <input type="text" id="eventTitleInput" maxlength="50" placeholder="이벤트 제목" />
+          <button class="btn btn-secondary color-save-btn" id="btnSaveTitle" type="button">저장</button>
+        </div>
+
+        <label>이벤트 상태</label>
+        <div class="inline-action-row" id="eventStatusRow">
+          <span class="status-badge" id="eventStatusBadge">준비중</span>
+          <button class="btn btn-primary color-save-btn" id="btnStartEvent" type="button">이벤트 시작</button>
+          <button class="btn btn-danger color-save-btn" id="btnCloseEvent" type="button" style="display:none;">이벤트 종료</button>
+        </div>
+
+        <label>참가 링크</label>
+        <div class="inline-action-row">
+          <input type="text" id="participantLinkInput" readonly />
+          <button class="btn btn-secondary color-save-btn" id="btnCopyLink" type="button">복사</button>
+        </div>
+
+        <label for="logoUpload">로고 이미지</label>
+        <div class="upload-row">
+          <input type="file" id="logoUpload" accept="image/*" style="display:none;" />
+          <button class="btn btn-secondary color-save-btn" id="btnLogoSelect" type="button">파일 선택</button>
+          <span class="upload-filename" id="logoFilename">선택된 파일 없음</span>
+          <button class="btn btn-secondary color-save-btn" id="btnLogoUpload" type="button" style="display:none;">업로드</button>
+        </div>
+        <div id="logoPreview" class="image-preview" style="display:none;">
+          <img id="logoPreviewImg" src="" alt="로고 미리보기" />
+        </div>
+
+        <label for="bgUpload">배경 이미지</label>
+        <div class="upload-row">
+          <input type="file" id="bgUpload" accept="image/*" style="display:none;" />
+          <button class="btn btn-secondary color-save-btn" id="btnBgSelect" type="button">파일 선택</button>
+          <span class="upload-filename" id="bgFilename">선택된 파일 없음</span>
+          <button class="btn btn-secondary color-save-btn" id="btnBgUpload" type="button" style="display:none;">업로드</button>
+        </div>
+        <div id="bgPreview" class="image-preview" style="display:none;">
+          <img id="bgPreviewImg" src="" alt="배경 미리보기" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary -->
+    <div class="admin-section">
+      <div class="summary-bar" id="summaryBar">
+        <div class="summary-item">
+          <div class="summary-value" id="totalCards">-</div>
+          <div class="summary-label">Total</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-value" id="drawnCards">-</div>
+          <div class="summary-label">Drawn</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-value" id="remainingCards">-</div>
+          <div class="summary-label">Remaining</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Prize Status -->
+    <div class="admin-section">
+      <h2>Prize Status</h2>
+      <div class="status-grid" id="statusGrid"></div>
+    </div>
+
+    <!-- Draw History -->
+    <div class="admin-section">
+      <h2>Draw History</h2>
+      <div id="historyContainer">
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Position</th>
+              <th>Page</th>
+              <th>Prize</th>
+            </tr>
+          </thead>
+          <tbody id="historyBody"></tbody>
+        </table>
+      </div>
+      <div class="history-pagination" id="historyPagination">
+        <button class="btn btn-secondary page-btn" id="historyPrev">이전</button>
+        <span class="page-info" id="historyPageInfo">1 / 1</span>
+        <button class="btn btn-secondary page-btn" id="historyNext">다음</button>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="admin-section">
+      <h2>Actions</h2>
+      <div class="board-config">
+        <label for="boardTextInput">뽑기판 텍스트</label>
+        <input type="text" id="boardTextInput" maxlength="30" placeholder="예: JIWOO 413" />
+        <label for="cardCountInput">카드 수 (텍스트 모양에 따라 자동 결정)</label>
+        <input type="number" id="cardCountInput" min="1" max="500" step="1" value="0" readonly />
+        <label for="boardColorInput">뽑기판 색상</label>
+        <div class="color-config">
+          <input type="color" id="boardColorInput" value="#ffffff" />
+          <input type="text" id="boardColorHex" value="#FFFFFF" maxlength="7" />
+          <button class="btn btn-secondary color-save-btn" id="btnSaveColor" type="button">색상 저장</button>
+        </div>
+        <div id="boardPreview" class="board-preview"></div>
+        <label>순위 배분 방식</label>
+        <div class="distribution-mode">
+          <label><input type="radio" name="distributionMode" value="auto" checked /> 자동 배분</label>
+          <label><input type="radio" name="distributionMode" value="manual" /> 수동 배분</label>
+        </div>
+        <div class="manual-distribution" id="manualDistribution" style="display:none;">
+          <div class="manual-row"><span>1등</span><input type="number" id="rank1Input" min="0" step="1" value="1" /></div>
+          <div class="manual-row"><span>2등</span><input type="number" id="rank2Input" min="0" step="1" value="2" /></div>
+          <div class="manual-row"><span>3등</span><input type="number" id="rank3Input" min="0" step="1" value="7" /></div>
+          <div class="manual-row"><span>4등</span><input type="number" id="rank4Input" min="0" step="1" value="10" /></div>
+          <div class="manual-row"><span>5등</span><input type="number" id="rank5Input" min="0" step="1" value="20" /></div>
+          <div class="manual-row"><span>6등</span><input type="number" id="rank6Input" min="0" step="1" value="60" /></div>
+          <div class="manual-sum" id="manualSum">합계: 100 / 카드 수: 0</div>
+        </div>
+        <small>텍스트는 한글/영문/숫자/공백을 사용할 수 있습니다. 공백으로 탭(페이지)을 구분합니다. 카드 수는 텍스트 모양에 따라 자동 결정됩니다. 수동 배분 시 합계가 카드 수와 같아야 합니다.</small>
+      </div>
+      <div class="admin-actions">
+        <button class="btn btn-primary" id="btnInit">카드 생성</button>
+        <button class="btn btn-danger" id="btnReset">데이터 리셋</button>
+        <button class="btn btn-secondary" id="btnRefresh">새로고침</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/letters.js"></script>
+  <script src="/js/auth.js"></script>
+  <script>
+    (function () {
+      if (!AUTH.isLoggedIn()) {
+        window.location.href = '/login';
+        return;
+      }
+
+      const slug = AUTH.getSlugFromPath();
+      if (!slug) {
+        alert('잘못된 이벤트 링크입니다.');
+        window.location.href = '/dashboard';
+        return;
+      }
+
+      // Set participant link
+      const participantLink = `${window.location.origin}/event/${slug}`;
+      document.getElementById('participantLinkInput').value = participantLink;
+
+      document.getElementById('btnLogout').addEventListener('click', () => AUTH.logout());
+
+      document.getElementById('btnCopyLink').addEventListener('click', () => {
+        const btn = document.getElementById('btnCopyLink');
+        navigator.clipboard.writeText(participantLink).then(() => {
+          btn.textContent = '복사됨!';
+          setTimeout(() => { btn.textContent = '복사'; }, 2000);
+        }).catch(() => {
+          alert('링크: ' + participantLink);
+        });
+      });
+
+      // ---- Event Settings ----
+      document.getElementById('btnSaveTitle').addEventListener('click', async () => {
+        const title = document.getElementById('eventTitleInput').value.trim();
+        if (!title) { alert('이벤트 제목을 입력해주세요.'); return; }
+        try {
+          const res = await AUTH.fetchWithAuth(`/api/events/${slug}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title })
+          });
+          if (!res) return;
+          const data = await res.json();
+          if (!res.ok) { alert(data.error || '저장 실패'); return; }
+          document.getElementById('adminEventTitle').textContent = title;
+          alert('제목을 저장했습니다.');
+        } catch (err) { alert('오류: ' + err.message); }
+      });
+
+      async function changeEventStatus(newStatus) {
+        const label = newStatus === 'active' ? '시작' : '종료';
+        if (!confirm(`이벤트를 ${label}하시겠습니까?`)) return;
+        try {
+          const res = await AUTH.fetchWithAuth(`/api/events/${slug}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: newStatus })
+          });
+          if (!res) return;
+          const data = await res.json();
+          if (!res.ok) { alert(data.error || '저장 실패'); return; }
+          updateStatusUI(newStatus);
+          alert(`이벤트가 ${label}되었습니다.`);
+        } catch (err) { alert('오류: ' + err.message); }
+      }
+
+      function updateStatusUI(status) {
+        const badge = document.getElementById('eventStatusBadge');
+        const startBtn = document.getElementById('btnStartEvent');
+        const closeBtn = document.getElementById('btnCloseEvent');
+        if (status === 'draft') {
+          badge.textContent = '준비중';
+          badge.className = 'status-badge badge-draft';
+          startBtn.style.display = '';
+          closeBtn.style.display = 'none';
+        } else if (status === 'active') {
+          badge.textContent = '진행중';
+          badge.className = 'status-badge badge-active';
+          startBtn.style.display = 'none';
+          closeBtn.style.display = '';
+        } else {
+          badge.textContent = '종료됨';
+          badge.className = 'status-badge badge-closed';
+          startBtn.style.display = 'none';
+          closeBtn.style.display = 'none';
+        }
+      }
+
+      document.getElementById('btnStartEvent').addEventListener('click', () => changeEventStatus('active'));
+      document.getElementById('btnCloseEvent').addEventListener('click', () => changeEventStatus('closed'));
+
+      // ---- Image Upload ----
+      function setupImageUpload({ selectBtnId, fileInputId, filenameId, uploadBtnId, previewWrapperId, previewImgId, fileType }) {
+        const uploadUrl = `/api/events/${slug}/upload`;
+        const fileInput = document.getElementById(fileInputId);
+        const filenameEl = document.getElementById(filenameId);
+        const uploadBtn = document.getElementById(uploadBtnId);
+        const previewWrapper = document.getElementById(previewWrapperId);
+        const previewImg = document.getElementById(previewImgId);
+
+        document.getElementById(selectBtnId).addEventListener('click', () => fileInput.click());
+
+        fileInput.addEventListener('change', () => {
+          const file = fileInput.files[0];
+          if (!file) return;
+          filenameEl.textContent = file.name;
+          uploadBtn.style.display = '';
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            previewImg.src = e.target.result;
+            previewWrapper.style.display = 'block';
+          };
+          reader.readAsDataURL(file);
+        });
+
+        uploadBtn.addEventListener('click', async () => {
+          const file = fileInput.files[0];
+          if (!file) return;
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('type', fileType);
+          uploadBtn.disabled = true;
+          uploadBtn.textContent = '업로드 중...';
+          try {
+            const res = await AUTH.fetchWithAuth(uploadUrl, { method: 'POST', body: formData });
+            if (!res) return;
+            const data = await res.json();
+            if (!res.ok) { alert(data.error || '업로드 실패'); return; }
+            alert('업로드 완료!');
+          } catch (err) {
+            alert('오류: ' + err.message);
+          } finally {
+            uploadBtn.disabled = false;
+            uploadBtn.textContent = '업로드';
+          }
+        });
+      }
+
+      setupImageUpload({
+        selectBtnId: 'btnLogoSelect',
+        fileInputId: 'logoUpload',
+        filenameId: 'logoFilename',
+        uploadBtnId: 'btnLogoUpload',
+        previewWrapperId: 'logoPreview',
+        previewImgId: 'logoPreviewImg',
+        fileType: 'logo'
+      });
+
+      setupImageUpload({
+        selectBtnId: 'btnBgSelect',
+        fileInputId: 'bgUpload',
+        filenameId: 'bgFilename',
+        uploadBtnId: 'btnBgUpload',
+        previewWrapperId: 'bgPreview',
+        previewImgId: 'bgPreviewImg',
+        fileType: 'background'
+      });
+
+      // ---- Admin Logic (from original admin.js, adapted with AUTH) ----
+      let historyPage = 1;
+      const historyPageSize = 10;
+      let historyItems = [];
+
+      const statusGrid = document.getElementById('statusGrid');
+      const historyBody = document.getElementById('historyBody');
+      const historyPrev = document.getElementById('historyPrev');
+      const historyNext = document.getElementById('historyNext');
+      const historyPageInfo = document.getElementById('historyPageInfo');
+      const historyPagination = document.getElementById('historyPagination');
+      const totalCards = document.getElementById('totalCards');
+      const drawnCards = document.getElementById('drawnCards');
+      const remainingCards = document.getElementById('remainingCards');
+      const boardTextInput = document.getElementById('boardTextInput');
+      const cardCountInput = document.getElementById('cardCountInput');
+      const boardColorInput = document.getElementById('boardColorInput');
+      const boardColorHex = document.getElementById('boardColorHex');
+      const btnSaveColor = document.getElementById('btnSaveColor');
+      const manualDistribution = document.getElementById('manualDistribution');
+      const distributionModeInputs = document.querySelectorAll('input[name="distributionMode"]');
+      const rankInputs = [1, 2, 3, 4, 5, 6].map(rank => document.getElementById(`rank${rank}Input`));
+      const boardPreview = document.getElementById('boardPreview');
+
+      distributionModeInputs.forEach(input => input.addEventListener('change', syncDistributionMode));
+      boardTextInput.addEventListener('input', updateBoardPreview);
+      boardColorInput.addEventListener('input', () => syncColorInputs('picker'));
+      boardColorHex.addEventListener('input', () => syncColorInputs('hex'));
+      btnSaveColor.addEventListener('click', saveBoardColor);
+
+      function esc(value) {
+        const div = document.createElement('div');
+        div.textContent = String(value);
+        return div.innerHTML;
+      }
+
+      function isValidHexColor(color) {
+        return typeof color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(color);
+      }
+
+      function syncColorInputs(source) {
+        if (source === 'picker') {
+          boardColorHex.value = boardColorInput.value.toUpperCase();
+          return;
+        }
+        const raw = boardColorHex.value.trim().toUpperCase();
+        if (isValidHexColor(raw)) boardColorInput.value = raw;
+      }
+
+      function getBoardColorValue() {
+        const raw = boardColorHex.value.trim().toUpperCase();
+        if (isValidHexColor(raw)) return raw;
+        return boardColorInput.value.toUpperCase();
+      }
+
+      function getDistributionMode() {
+        const checked = document.querySelector('input[name="distributionMode"]:checked');
+        return checked ? checked.value : 'auto';
+      }
+
+      function syncDistributionMode() {
+        manualDistribution.style.display = getDistributionMode() === 'manual' ? 'grid' : 'none';
+        validateManualSum();
+      }
+
+      function getManualSum() {
+        return rankInputs.reduce((sum, el) => sum + (parseInt(el.value, 10) || 0), 0);
+      }
+
+      function getCardCount() {
+        return parseInt(cardCountInput.value, 10) || 0;
+      }
+
+      function validateManualSum() {
+        const sumEl = document.getElementById('manualSum');
+        const btnInit = document.getElementById('btnInit');
+        const total = getCardCount();
+        const sum = getManualSum();
+        const isManual = getDistributionMode() === 'manual';
+
+        sumEl.textContent = `합계: ${sum} / 카드 수: ${total}`;
+
+        if (isManual && total > 0 && sum !== total) {
+          sumEl.style.color = '#e74c3c';
+          btnInit.disabled = true;
+          btnInit.style.opacity = '0.5';
+        } else {
+          sumEl.style.color = '#27ae60';
+          btnInit.disabled = false;
+          btnInit.style.opacity = '1';
+        }
+      }
+
+      rankInputs.forEach(el => el.addEventListener('input', validateManualSum));
+
+      function updateBoardPreview() {
+        const text = boardTextInput.value.trim();
+        if (!text) {
+          boardPreview.innerHTML = '<span class="preview-empty">텍스트를 입력하면 미리보기가 표시됩니다.</span>';
+          return;
+        }
+        const normalized = normalizeBoardText(text);
+        if (!normalized) {
+          boardPreview.innerHTML = '<span class="preview-empty">유효한 문자가 없습니다.</span>';
+          return;
+        }
+        const pages = getBoardPages(normalized);
+        const pageDetails = [];
+        pages.forEach(page => {
+          const layout = buildTextLayout(page);
+          pageDetails.push({ page, cells: layout.length || 1 });
+        });
+        const totalCells = pageDetails.reduce((s, p) => s + p.cells, 0);
+        cardCountInput.value = totalCells;
+        validateManualSum();
+
+        let previewHTML = '<div class="preview-summary">';
+        previewHTML += `총 <strong>${esc(totalCells)}</strong>개 카드`;
+        if (pages.length > 1) previewHTML += ` (${esc(pages.length)}개 탭)`;
+        previewHTML += '</div>';
+
+        pages.forEach((page, pageIdx) => {
+          const layout = buildTextLayout(page);
+          if (layout.length === 0) return;
+          const maxRow = Math.max(...layout.map(p => p.row));
+          const maxCol = Math.max(...layout.map(p => p.col));
+          const grid = [];
+          for (let r = 0; r <= maxRow; r++) {
+            grid[r] = [];
+            for (let c = 0; c <= maxCol; c++) grid[r][c] = false;
+          }
+          layout.forEach(p => { grid[p.row][p.col] = true; });
+          previewHTML += '<div class="preview-page">';
+          previewHTML += `<div class="preview-page-label">${esc(page)} (${esc(pageDetails[pageIdx].cells)}장)</div>`;
+          previewHTML += '<div class="preview-grid">';
+          for (let r = 0; r <= maxRow; r++) {
+            for (let c = 0; c <= maxCol; c++) {
+              previewHTML += grid[r][c]
+                ? '<span class="preview-cell active"></span>'
+                : '<span class="preview-cell"></span>';
+            }
+            previewHTML += '<br>';
+          }
+          previewHTML += '</div></div>';
+        });
+        boardPreview.innerHTML = previewHTML;
+      }
+
+      async function saveBoardColor() {
+        const boardColor = getBoardColorValue();
+        if (!isValidHexColor(boardColor)) { alert('색상 형식은 #RRGGBB 이어야 합니다.'); return; }
+        try {
+          const res = await AUTH.fetchWithAuth(`/api/events/${slug}/board-color`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ boardColor })
+          });
+          if (!res) return;
+          const data = await res.json();
+          if (data.success) alert(data.message || '색상을 저장했습니다.');
+          else alert(data.error || '색상 저장에 실패했습니다.');
+        } catch (err) { alert('오류: ' + err.message); }
+      }
+
+      document.getElementById('btnInit').addEventListener('click', async () => {
+        const text = boardTextInput.value.trim();
+        const distributionMode = getDistributionMode();
+        if (!text) { alert('뽑기판 텍스트를 입력해주세요.'); return; }
+
+        let manualRanks = null;
+        if (distributionMode === 'manual') {
+          manualRanks = rankInputs.map((el, idx) => ({
+            rank: idx + 1,
+            count: parseInt(el.value, 10)
+          }));
+          if (manualRanks.some(v => !Number.isInteger(v.count) || v.count < 0)) {
+            alert('수동 배분 수량은 0 이상의 정수만 입력해주세요.');
+            return;
+          }
+        }
+
+        const count = parseInt(cardCountInput.value, 10) || 0;
+        const boardColor = getBoardColorValue();
+        if (!confirm(`"${text}" 텍스트로 카드 ${count}개를 생성하시겠습니까?`)) return;
+
+        try {
+          const res = await AUTH.fetchWithAuth(`/api/events/${slug}/init`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text, boardColor, distributionMode, manualRanks })
+          });
+          if (!res) return;
+          const data = await res.json();
+          if (data.success) { alert(data.message); loadAll(); }
+          else alert(data.error || '카드 생성에 실패했습니다.');
+        } catch (err) { alert('오류: ' + err.message); }
+      });
+
+      document.getElementById('btnReset').addEventListener('click', async () => {
+        if (!confirm('데이터를 모두 삭제하시겠습니까?')) return;
+        if (!confirm('정말로 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) return;
+        try {
+          const res = await AUTH.fetchWithAuth(`/api/events/${slug}/reset`, { method: 'POST' });
+          if (!res) return;
+          const data = await res.json();
+          if (data.success) { alert(data.message); loadAll(); }
+          else alert(data.error || '데이터 리셋에 실패했습니다.');
+        } catch (err) { alert('오류: ' + err.message); }
+      });
+
+      document.getElementById('btnRefresh').addEventListener('click', loadAll);
+
+      historyPrev.addEventListener('click', () => {
+        if (historyPage > 1) { historyPage -= 1; renderHistoryPage(); }
+      });
+      historyNext.addEventListener('click', () => {
+        const totalPages = Math.max(1, Math.ceil(historyItems.length / historyPageSize));
+        if (historyPage < totalPages) { historyPage += 1; renderHistoryPage(); }
+      });
+
+      async function loadAll() {
+        await Promise.all([loadStatus(), loadHistory()]);
+      }
+
+      async function loadStatus() {
+        try {
+          const res = await AUTH.fetchWithAuth(`/api/events/${slug}/status`);
+          if (!res) return;
+          const data = await res.json();
+
+          // Update event settings UI
+          if (data.title) {
+            document.getElementById('eventTitleInput').value = data.title;
+            document.getElementById('adminEventTitle').textContent = data.title;
+          }
+          if (data.status) {
+            updateStatusUI(data.status);
+          }
+          if (data.logo_url) {
+            document.getElementById('logoPreviewImg').src = data.logo_url;
+            document.getElementById('logoPreview').style.display = 'block';
+          }
+          if (data.bg_url) {
+            document.getElementById('bgPreviewImg').src = data.bg_url;
+            document.getElementById('bgPreview').style.display = 'block';
+          }
+
+          if (data.boardText) {
+            boardTextInput.value = data.boardText;
+            updateBoardPreview();
+          }
+          if (isValidHexColor(data.boardColor)) {
+            boardColorInput.value = data.boardColor;
+            boardColorHex.value = data.boardColor.toUpperCase();
+          }
+
+          if (!data.prizes || data.prizes.length === 0) {
+            totalCards.textContent = '0';
+            drawnCards.textContent = '0';
+            remainingCards.textContent = '0';
+            statusGrid.innerHTML = '<div class="empty-state">초기화되지 않았습니다.</div>';
+            return;
+          }
+
+          const summary = data.summary || {};
+          totalCards.textContent = summary.total || 0;
+          drawnCards.textContent = summary.drawn || 0;
+          remainingCards.textContent = (summary.total || 0) - (summary.drawn || 0);
+          statusGrid.innerHTML = '';
+          data.prizes.forEach(p => {
+            const card = document.createElement('div');
+            card.className = 'status-card';
+
+            const rankDiv = document.createElement('div');
+            rankDiv.className = 'status-rank';
+            rankDiv.textContent = `${p.prize_rank}등`;
+
+            const numbersDiv = document.createElement('div');
+            numbersDiv.className = 'status-numbers';
+            const drawnSpan = document.createElement('span');
+            drawnSpan.className = 'status-drawn';
+            drawnSpan.textContent = p.drawn;
+            const totalSpan = document.createElement('span');
+            totalSpan.className = 'status-total';
+            totalSpan.textContent = `/ ${p.total}`;
+            numbersDiv.appendChild(drawnSpan);
+            numbersDiv.appendChild(totalSpan);
+
+            const remainDiv = document.createElement('div');
+            remainDiv.style.marginTop = '4px';
+            const remainSpan = document.createElement('span');
+            remainSpan.className = 'status-remaining';
+            remainSpan.textContent = `잔여 ${p.remaining}`;
+            remainDiv.appendChild(remainSpan);
+
+            card.appendChild(rankDiv);
+            card.appendChild(numbersDiv);
+            card.appendChild(remainDiv);
+            statusGrid.appendChild(card);
+          });
+        } catch (err) {
+          console.error('Load status error:', err);
+        }
+      }
+
+      async function loadHistory() {
+        try {
+          const res = await AUTH.fetchWithAuth(`/api/events/${slug}/history`);
+          if (!res) return;
+          const data = await res.json();
+          historyItems = data.history || [];
+
+          if (historyItems.length === 0) {
+            historyPage = 1;
+            historyBody.innerHTML = '<tr><td colspan="4" class="empty-state">아직 당첨 이력이 없습니다.</td></tr>';
+            historyPagination.style.display = 'none';
+            return;
+          }
+
+          const totalPages = Math.max(1, Math.ceil(historyItems.length / historyPageSize));
+          if (historyPage > totalPages) historyPage = totalPages;
+          historyPagination.style.display = 'flex';
+          renderHistoryPage();
+        } catch (err) {
+          console.error('Load history error:', err);
+        }
+      }
+
+      function renderHistoryPage() {
+        const totalPages = Math.max(1, Math.ceil(historyItems.length / historyPageSize));
+        const start = (historyPage - 1) * historyPageSize;
+        const pageItems = historyItems.slice(start, start + historyPageSize);
+
+        historyBody.innerHTML = '';
+        pageItems.forEach(h => {
+          const time = new Date(h.drawn_at).toLocaleTimeString('ko-KR', {
+            hour: '2-digit', minute: '2-digit', second: '2-digit'
+          });
+
+          const tr = document.createElement('tr');
+          const tdTime = document.createElement('td');
+          tdTime.textContent = time;
+          const tdPos = document.createElement('td');
+          tdPos.textContent = `#${h.position}`;
+          const tdPage = document.createElement('td');
+          tdPage.textContent = h.page || '-';
+          const tdPrize = document.createElement('td');
+          const badge = document.createElement('span');
+          badge.className = `rank-badge rank-${parseInt(h.prize_rank, 10)}`;
+          badge.textContent = `${h.prize_rank}등`;
+          tdPrize.appendChild(badge);
+
+          tr.appendChild(tdTime);
+          tr.appendChild(tdPos);
+          tr.appendChild(tdPage);
+          tr.appendChild(tdPrize);
+          historyBody.appendChild(tr);
+        });
+
+        historyPageInfo.textContent = `${historyPage} / ${totalPages}`;
+        historyPrev.disabled = historyPage <= 1;
+        historyNext.disabled = historyPage >= totalPages;
+      }
+
+      // Init
+      syncDistributionMode();
+      syncColorInputs('picker');
+      updateBoardPreview();
+      loadAll();
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+{
+  "name": "birthday-lucky-draw",
+  "version": "1.0.0",
+  "description": "Lucky Draw - 나만의 럭키드로우 이벤트 플랫폼",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^2.1.1",
+    "mysql2": "^3.6.0",
+    "nanoid": "^3.3.11"
+  }
+}

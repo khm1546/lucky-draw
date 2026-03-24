@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <title>Lucky Draw</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header" id="eventHeader">
+    <div class="event-header-logo" id="eventLogoWrap" style="display:none;">
+      <img id="eventLogoImg" src="" alt="로고" class="event-logo-img" />
+    </div>
+    <h1><span id="eventTitle">Lucky Draw</span></h1>
+    <div class="remaining-count" id="remainingCount"></div>
+  </div>
+
+  <div class="tabs" id="pageTabs"></div>
+
+  <!-- Card Grid -->
+  <div class="grid-container">
+    <div class="card-grid" id="cardGrid"></div>
+  </div>
+
+  <!-- Result Modal -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+      <div class="modal-rank" id="modalRank"></div>
+      <div class="modal-label" id="modalLabel"></div>
+      <button class="modal-close" id="modalClose">OK</button>
+    </div>
+  </div>
+
+  <!-- Confetti Container -->
+  <div class="confetti-container" id="confettiContainer"></div>
+
+  <!-- Not Initialized -->
+  <div class="not-initialized" id="notInitialized" style="display:none;">
+    <p>아직 초기화되지 않았습니다.</p>
+    <small>관리자에서 텍스트를 입력하고 카드 생성을 먼저 진행해주세요.</small>
+  </div>
+
+  <!-- Event Status Messages -->
+  <div class="event-status-msg" id="eventStatusMsg" style="display:none;"></div>
+
+  <script src="/js/letters.js"></script>
+  <script src="/js/auth.js"></script>
+  <script>
+    (function () {
+      const slug = AUTH.getSlugFromPath();
+      if (!slug) {
+        document.body.innerHTML = '<div class="not-initialized"><p>잘못된 이벤트 링크입니다.</p></div>';
+        return;
+      }
+
+      let cards = [];
+      let boardText = 'LUCKY DRAW';
+      let pages = ['LUCKY'];
+      let currentPage = 'LUCKY';
+      let isDrawing = false;
+
+      const grid = document.getElementById('cardGrid');
+      const pageTabs = document.getElementById('pageTabs');
+      const remainingEl = document.getElementById('remainingCount');
+      const modalOverlay = document.getElementById('modalOverlay');
+      const modalRank = document.getElementById('modalRank');
+      const modalLabel = document.getElementById('modalLabel');
+      const modalClose = document.getElementById('modalClose');
+      const confettiContainer = document.getElementById('confettiContainer');
+      const notInitialized = document.getElementById('notInitialized');
+      const gridContainer = document.querySelector('.grid-container');
+      const eventStatusMsg = document.getElementById('eventStatusMsg');
+      const eventTitle = document.getElementById('eventTitle');
+      const eventLogoWrap = document.getElementById('eventLogoWrap');
+      const eventLogoImg = document.getElementById('eventLogoImg');
+
+      modalClose.addEventListener('click', closeModal);
+      modalOverlay.addEventListener('click', (e) => {
+        if (e.target === modalOverlay) closeModal();
+      });
+
+      function showStatusMessage(msg) {
+        gridContainer.style.display = 'none';
+        notInitialized.style.display = 'none';
+        pageTabs.style.display = 'none';
+        eventStatusMsg.style.display = 'block';
+        eventStatusMsg.textContent = msg;
+      }
+
+      async function loadEventInfo() {
+        try {
+          const res = await fetch(`/api/e/${slug}/info`);
+          if (!res.ok) {
+            showStatusMessage('이벤트를 찾을 수 없습니다.');
+            return false;
+          }
+          const data = await res.json();
+
+          // Set title
+          if (data.title) eventTitle.textContent = data.title;
+          document.title = (data.title || 'Lucky Draw');
+
+          // Set logo
+          if (data.logo) {
+            eventLogoImg.src = data.logo;
+            eventLogoWrap.style.display = 'block';
+          }
+
+          // Set background
+          if (data.background) {
+            document.body.style.backgroundImage = `url(${data.background})`;
+            document.body.style.backgroundSize = 'cover';
+            document.body.style.backgroundPosition = 'center';
+            document.body.style.backgroundAttachment = 'fixed';
+          }
+
+          // Check status
+          if (data.status === 'draft') {
+            showStatusMessage('이벤트가 아직 시작되지 않았습니다.');
+            return false;
+          }
+          if (data.status === 'closed') {
+            showStatusMessage('종료된 이벤트입니다.');
+            return false;
+          }
+
+          return true;
+        } catch (err) {
+          showStatusMessage('이벤트 정보를 불러오지 못했습니다.');
+          return false;
+        }
+      }
+
+      async function loadCards() {
+        try {
+          const res = await fetch(`/api/e/${slug}/cards`);
+          const data = await res.json();
+          boardText = data.boardText || boardText;
+          applyBoardColor(data.boardColor);
+          pages = Array.isArray(data.pages) && data.pages.length ? data.pages : ['?'];
+          if (!pages.includes(currentPage)) currentPage = pages[0];
+          renderTabs();
+
+          if (!data.cards || data.cards.length === 0) {
+            showNotInitialized(true);
+            cards = [];
+            return;
+          }
+
+          showNotInitialized(false);
+          cards = data.cards;
+          renderGrid();
+          updateRemainingCount();
+        } catch (err) {
+          console.error('Failed to load cards:', err);
+        }
+      }
+
+      function applyBoardColor(hex) {
+        const color = isValidHexColor(hex) ? hex.toUpperCase() : '#FFFFFF';
+        const rgb = hexToRgb(color);
+        const textColor = getReadableMarkColor(rgb);
+        const borderColor = shadeColor(rgb, -18);
+        document.documentElement.style.setProperty('--draw-card-front-bg', color);
+        document.documentElement.style.setProperty('--draw-card-front-mark', textColor);
+        document.documentElement.style.setProperty('--draw-card-front-border', borderColor);
+      }
+
+      function isValidHexColor(color) {
+        return typeof color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(color);
+      }
+
+      function hexToRgb(hex) {
+        return {
+          r: parseInt(hex.slice(1, 3), 16),
+          g: parseInt(hex.slice(3, 5), 16),
+          b: parseInt(hex.slice(5, 7), 16)
+        };
+      }
+
+      function getReadableMarkColor({ r, g, b }) {
+        const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+        return luminance > 0.7 ? '#8E8E8E' : '#F1F1F1';
+      }
+
+      function shadeColor({ r, g, b }, amount) {
+        const clamp = (v) => Math.max(0, Math.min(255, v));
+        return `rgb(${clamp(r + amount)}, ${clamp(g + amount)}, ${clamp(b + amount)})`;
+      }
+
+      function showNotInitialized(show) {
+        notInitialized.style.display = show ? 'block' : 'none';
+        gridContainer.style.display = show ? 'none' : 'flex';
+      }
+
+      function updateRemainingCount() {
+        const remaining = cards.filter(c => !c.is_drawn).length;
+        const total = cards.length;
+        remainingEl.textContent = `${remaining} / ${total} remaining`;
+      }
+
+      function renderGrid() {
+        grid.innerHTML = '';
+        const pageCards = cards
+          .filter(c => c.page === currentPage)
+          .sort((a, b) => a.position - b.position);
+
+        let layout = buildTextLayout(currentPage);
+        if (layout.length !== pageCards.length) {
+          layout = buildSequentialLayout(pageCards.length);
+        }
+        if (layout.length === 0) return;
+
+        const maxRow = Math.max(...layout.map(p => p.row));
+        const maxCol = Math.max(...layout.map(p => p.col));
+
+        const cellW = 64;
+        const cellH = 72;
+        const gap = 6;
+        grid.style.gridTemplateColumns = `repeat(${maxCol + 1}, ${cellW}px)`;
+        grid.style.gridTemplateRows = `repeat(${maxRow + 1}, ${cellH}px)`;
+        grid.style.gap = `${gap}px`;
+
+        layout.forEach((pos, idx) => {
+          const card = pageCards[idx];
+          if (!card) return;
+
+          const wrapper = document.createElement('div');
+          wrapper.className = 'card-wrapper';
+          wrapper.style.gridRow = pos.row + 1;
+          wrapper.style.gridColumn = pos.col + 1;
+
+          const cardEl = document.createElement('div');
+          cardEl.className = 'card';
+          if (card.is_drawn) cardEl.classList.add('flipped', 'drawn');
+
+          const front = document.createElement('div');
+          front.className = 'card-front';
+          front.innerHTML = '<span class="question-mark"></span>';
+
+          const back = document.createElement('div');
+          back.className = 'card-back drawn-back';
+          if (card.is_drawn) back.innerHTML = '<span class="drawn-check">&#10003;</span>';
+
+          cardEl.appendChild(front);
+          cardEl.appendChild(back);
+          wrapper.appendChild(cardEl);
+
+          if (!card.is_drawn) {
+            wrapper.addEventListener('click', () => drawCard(card.id, cardEl));
+          } else {
+            wrapper.style.pointerEvents = 'none';
+          }
+
+          grid.appendChild(wrapper);
+        });
+
+        requestAnimationFrame(() => {
+          grid.style.transform = '';
+          gridContainer.style.height = '';
+          const containerWidth = gridContainer.clientWidth - 64;
+          const gridWidth = grid.scrollWidth;
+          if (gridWidth > containerWidth) {
+            const scale = containerWidth / gridWidth;
+            grid.style.transform = `scale(${scale})`;
+            gridContainer.style.height = Math.ceil(grid.scrollHeight * scale + 40) + 'px';
+          }
+        });
+      }
+
+      function buildSequentialLayout(total) {
+        const cols = 10;
+        const arr = [];
+        for (let i = 0; i < total; i++) {
+          arr.push({ row: Math.floor(i / cols), col: i % cols, isDecoration: false });
+        }
+        return arr;
+      }
+
+      function renderTabs() {
+        pageTabs.innerHTML = '';
+        if (pages.length <= 1) {
+          pageTabs.style.display = 'none';
+          return;
+        }
+        pageTabs.style.display = 'flex';
+        pages.forEach(page => {
+          const btn = document.createElement('button');
+          btn.className = 'tab-btn';
+          btn.textContent = page;
+          if (page === currentPage) {
+            btn.classList.add('active');
+            btn.disabled = true;
+          }
+          btn.addEventListener('click', () => {
+            if (page === currentPage) return;
+            currentPage = page;
+            renderTabs();
+            renderGrid();
+          });
+          pageTabs.appendChild(btn);
+        });
+      }
+
+      async function drawCard(cardId, cardEl) {
+        if (isDrawing) return;
+        isDrawing = true;
+
+        try {
+          const res = await fetch(`/api/e/${slug}/draw`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cardId })
+          });
+          const data = await res.json();
+
+          if (!data.success) {
+            alert(data.error || '추첨에 실패했습니다.');
+            isDrawing = false;
+            return;
+          }
+
+          const rank = data.prize_rank;
+          const back = cardEl.querySelector('.card-back');
+          back.innerHTML = '<span class="drawn-check">&#10003;</span>';
+          cardEl.classList.add('flipped', 'drawn');
+
+          const wrapper = cardEl.closest('.card-wrapper');
+          if (wrapper) wrapper.style.pointerEvents = 'none';
+
+          const card = cards.find(c => c.id === cardId);
+          if (card) {
+            card.is_drawn = true;
+            card.prize_rank = rank;
+          }
+
+          setTimeout(() => {
+            showResult(rank);
+            updateRemainingCount();
+            isDrawing = false;
+          }, 700);
+        } catch (err) {
+          console.error('Draw error:', err);
+          isDrawing = false;
+        }
+      }
+
+      function showResult(rank) {
+        modalRank.textContent = `${rank}등`;
+        modalRank.className = `modal-rank rank-${parseInt(rank, 10)}`;
+        modalLabel.textContent = '';
+        modalLabel.style.display = 'none';
+        modalOverlay.classList.add('show');
+        if (rank <= 3) launchConfetti(rank);
+      }
+
+      function closeModal() {
+        modalOverlay.classList.remove('show');
+      }
+
+      function launchConfetti(rank) {
+        confettiContainer.innerHTML = '';
+        const colors = {
+          1: ['#FFD700', '#FFA500', '#FF6347', '#FF69B4', '#FFE4B5'],
+          2: ['#C0C0C0', '#E8E8E8', '#A8A8A8', '#D8D8D8', '#B0B0B0'],
+          3: ['#B76E79', '#E8C4C8', '#D4A0A8', '#C89098', '#DEB0B8']
+        };
+        const palette = colors[rank] || colors[3];
+        const count = rank === 1 ? 60 : rank === 2 ? 40 : 25;
+        for (let i = 0; i < count; i++) {
+          const piece = document.createElement('div');
+          piece.className = 'confetti-piece';
+          piece.style.left = Math.random() * 100 + '%';
+          piece.style.background = palette[Math.floor(Math.random() * palette.length)];
+          piece.style.width = `${Math.random() * 8 + 6}px`;
+          piece.style.height = `${Math.random() * 8 + 6}px`;
+          piece.style.borderRadius = Math.random() > 0.5 ? '50%' : '2px';
+          piece.style.animationDuration = `${Math.random() * 2 + 2}s`;
+          piece.style.animationDelay = `${Math.random() * 0.5}s`;
+          confettiContainer.appendChild(piece);
+        }
+        setTimeout(() => { confettiContainer.innerHTML = ''; }, 4000);
+      }
+
+      // Init
+      (async () => {
+        const ok = await loadEventInfo();
+        if (ok) await loadCards();
+      })();
+    })();
+  </script>
+</body>
+</html>
